@@ -92,50 +92,53 @@ func parseComplexExpression(expr string) (float64, error) {
 
 // AddExpressionHandler – обработчик POST-запроса для добавления нового выражения
 func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
-
-	userID, ok := r.Context().Value("userID").(uint)
-	if !ok {
-		http.Error(w, "user not authorized", http.StatusUnauthorized)
-		return
-	}
-
+	// Декодируем тело запроса в структуру Request
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid expression payload", http.StatusBadRequest)
 		return
 	}
 
-	// Если хотите сохранить запрос в БД через models, убедитесь, что правильно импортировали пакет models:
-	/*
-	   expression := models.Expression{
-	       UserID:     userID,
-	       Expression: req.Expression,
-	       Status:     "pending",
-	   }
-	   database.DB.Create(&expression)
-	*/
+	// (Опционально) Проверяем, что выражение не пустое
+	if req.Expression == "" {
+		http.Error(w, "expression cannot be empty", http.StatusBadRequest)
+		return
+	}
 
-	// Вычисляем результат выражения
+	// Вычисляем результат с помощью функции parseComplexExpression
 	result, err := parseComplexExpression(req.Expression)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Генерация уникального ID для выражения
+	// Генерируем уникальный ID для нового выражения
 	expressionID := generateUniqueID()
 
+	// Если вы используете базу данных, можно сохранить запись (требуется импорт пакетов models/database)
+	/*
+	   expression := models.Expression{
+	       UserID:     userID, // Если нужно, получите userID из контекста (r.Context())
+	       Expression: req.Expression,
+	       Status:     "pending",
+	   }
+	   database.DB.Create(&expression)
+	*/
+
+	// Создаем запись для глобальной карты выражений
 	expr := &Expression{
 		ID:         expressionID,
 		Expression: req.Expression,
 		Status:     "pending",
-		Result:     result,
+		Result:     result, // Результат вычисления сразу записываем в структуру
 	}
 
+	// Обеспечиваем потокобезопасное сохранение записи
 	expressionsMutex.Lock()
 	expressions[expressionID] = expr
 	expressionsMutex.Unlock()
 
+	// Возвращаем ответ с кодом 201 и JSON с ID созданного выражения
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"id": expressionID})
 }
