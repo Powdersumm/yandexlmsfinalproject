@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/Powdersumm/Yandexlmscalcproject2sprint/internal/application"
+	"github.com/Powdersumm/yandexlmsfinalproject /internal/application"
 )
 
 func main() {
