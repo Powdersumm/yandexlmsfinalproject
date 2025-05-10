@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/Knetic/govaluate"
+	"github.com/Powdersumm/Yandexlmscalcproject2sprint/database"
+	"github.com/Powdersumm/Yandexlmscalcproject2sprint/middleware"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
@@ -91,20 +93,11 @@ func parseComplexExpression(expr string) (float64, error) {
 // AddExpressionHandler – обработчик POST-запроса для добавления нового выражения
 func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 
-	userID := c.MustGet("userID").(uint)
-
-	var req Request
-	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
-		// ...
+	userID, ok := r.Context().Value("userID").(uint)
+	if !ok {
+		http.Error(w, "user not authorized", http.StatusUnauthorized)
+		return
 	}
-
-	expression := models.Expression{
-		UserID:     userID,
-		Expression: req.Expression,
-		Status:     "pending",
-	}
-
-	database.DB.Create(&expression)
 
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -112,7 +105,17 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Используем функцию parseComplexExpression для вычисления результата
+	// Если хотите сохранить запрос в БД через models, убедитесь, что правильно импортировали пакет models:
+	/*
+	   expression := models.Expression{
+	       UserID:     userID,
+	       Expression: req.Expression,
+	       Status:     "pending",
+	   }
+	   database.DB.Create(&expression)
+	*/
+
+	// Вычисляем результат выражения
 	result, err := parseComplexExpression(req.Expression)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -126,15 +129,13 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 		ID:         expressionID,
 		Expression: req.Expression,
 		Status:     "pending",
-		Result:     result, // Записываем результат сразу
+		Result:     result,
 	}
 
-	// Защищаем доступ к глобальной карте expressions
 	expressionsMutex.Lock()
 	expressions[expressionID] = expr
 	expressionsMutex.Unlock()
 
-	// Возвращаем ответ с ID выражения
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"id": expressionID})
 }
