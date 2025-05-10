@@ -3,6 +3,8 @@ package database
 import (
 	"os"
 
+	"github.com/Powdersumm/Yandexlmscalcproject2sprint/models"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
