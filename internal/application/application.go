@@ -252,7 +252,8 @@ func (a *Application) RunServer() error {
 
 	// Protected routes
 	authRouter := r.PathPrefix("/api/v1").Subrouter()
-	authRouter.Use(middleware.AuthMiddleware())
+	authRouter.Use(middleware.AuthMiddleware)
+
 	{
 		authRouter.HandleFunc("/calculate", handlers.AddExpressionHandler).Methods("POST")
 		authRouter.HandleFunc("/expressions", handlers.GetExpressionsHandler).Methods("GET")

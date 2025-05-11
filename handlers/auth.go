@@ -1,26 +1,27 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/Powdersumm/Yandexlmsfinalproject/database"
 	"github.com/Powdersumm/Yandexlmsfinalproject/models"
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func Register(c *gin.Context) {
+// Register - обработчик регистрации
+func Register(w http.ResponseWriter, r *http.Request) {
 	type Request struct {
 		Login    string `json:"login"`
 		Password string `json:"password"`
 	}
 
 	var req Request
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
@@ -28,7 +29,7 @@ func Register(c *gin.Context) {
 	var user models.User
 	database.DB.Where("login = ?", req.Login).First(&user)
 	if user.ID != 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "User exists"})
+		http.Error(w, "User exists", http.StatusConflict)
 		return
 	}
 
@@ -41,18 +42,21 @@ func Register(c *gin.Context) {
 	}
 	database.DB.Create(&newUser)
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User created"})
+	// Ответ
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"message": "User created"})
 }
 
-func Login(c *gin.Context) {
+// Login - обработчик входа
+func Login(w http.ResponseWriter, r *http.Request) {
 	type Request struct {
 		Login    string `json:"login"`
 		Password string `json:"password"`
 	}
 
 	var req Request
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
@@ -60,13 +64,13 @@ func Login(c *gin.Context) {
 	var user models.User
 	database.DB.Where("login = ?", req.Login).First(&user)
 	if user.ID == 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	// Проверка пароля
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
@@ -78,8 +82,54 @@ func Login(c *gin.Context) {
 
 	tokenString, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 
-	c.JSON(http.StatusOK, gin.H{
+	// Ответ
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
 		"access_token": tokenString,
 		"token_type":   "bearer",
+	})
+}
+
+// AddExpressionHandler - обработчик для добавления нового выражения
+func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
+	type Request struct {
+		Expression string `json:"expression"`
+	}
+
+	var req Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// (Опционально) Проверяем, что выражение не пустое
+	if req.Expression == "" {
+		http.Error(w, "Expression cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	// Генерация ID выражения (можно использовать UUID)
+	expressionID := time.Now().UnixNano()
+
+	// Отправляем JSON-ответ с ID выражения
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":         expressionID,
+		"expression": req.Expression,
+		"status":     "pending",
+	})
+}
+
+// GetExpressionsHandler - обработчик для получения списка выражений
+func GetExpressionsHandler(w http.ResponseWriter, r *http.Request) {
+	expressions := []map[string]interface{}{
+		{"id": 1, "expression": "2 + 2", "result": 4, "status": "completed"},
+		{"id": 2, "expression": "5 * 5", "result": 25, "status": "completed"},
+	}
+
+	// Отправляем JSON с примерами выражений
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"expressions": expressions,
 	})
 }
