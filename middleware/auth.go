@@ -1,29 +1,42 @@
 package middleware
 
 import (
+	"context"
+	"net/http"
 	"os"
+	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		tokenString := c.GetHeader("Authorization")
+// AuthMiddleware для Gorilla Mux
+func AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Получаем заголовок Authorization
+		tokenString := r.Header.Get("Authorization")
 		if tokenString == "" {
-			c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		token, _ := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Удаляем "Bearer " из строки, если токен передан в стандартном формате
+		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+
+		// Парсим токен
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(os.Getenv("JWT_SECRET")), nil
 		})
 
+		// Проверяем валидность токена
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			c.Set("userID", claims["sub"])
-			c.Next()
+			// Добавляем userID в контекст запроса
+			ctx := r.Context()
+			ctx = context.WithValue(ctx, "userID", claims["sub"])
+
+			// Передаём управление следующему обработчику с обновленным контекстом
+			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
-			c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"})
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
 		}
-	}
+	})
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Knetic/govaluate"
 	"github.com/Powdersumm/Yandexlmsfinalproject/database"
+	"github.com/Powdersumm/Yandexlmsfinalproject/handlers"
 	"github.com/Powdersumm/Yandexlmsfinalproject/middleware"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -257,8 +258,6 @@ func (a *Application) RunServer() error {
 		authRouter.HandleFunc("/expressions", handlers.GetExpressionsHandler).Methods("GET")
 	}
 
-	r := mux.NewRouter()
-
 	r.HandleFunc("/api/v1/calculate", AddExpressionHandler).Methods("POST")
 	r.HandleFunc("/api/v1/expressions", GetExpressionsHandler).Methods("GET")
 	r.HandleFunc("/api/v1/expressions/{id}", GetExpressionByIDHandler).Methods("GET")
@@ -268,8 +267,10 @@ func (a *Application) RunServer() error {
 
 	fmt.Println("Запуск сервера на порту " + a.config.Addr)
 
-	if err := http.ListenAndServe(":"+a.config.Addr, r); err != nil {
+	err := http.ListenAndServe(":"+a.config.Addr, r) // Используем = вместо :=
+	if err != nil {
 		log.Fatal("Ошибка при запуске сервера:", err)
 	}
-	return http.ListenAndServe(":"+a.config.Addr, r)
+	return err
+
 }
