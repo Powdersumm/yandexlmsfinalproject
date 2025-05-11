@@ -62,7 +62,7 @@ func getTask() (Task, error) {
 	var err error
 
 	for attempts := 0; attempts < 3; attempts++ {
-		resp, err := http.Get("http://localhost:8080/internal/task")
+		resp, err := http.Get("http://app:8080/internal/task")
 		if err != nil {
 			log.Printf("Error sending GET request to /internal/task: %v", err)
 			time.Sleep(2 * time.Second)
