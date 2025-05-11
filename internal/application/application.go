@@ -9,6 +9,7 @@ import (
 	"os"
 	"sync"
 	"time"
+
 	"github.com/joho/godotenv"
 
 	"github.com/Knetic/govaluate"
@@ -243,6 +244,7 @@ func startAgent() {
 // Функция запуска приложения
 func (a *Application) RunServer() error {
 
+	LoadEnv()
 	database.Connect() // Добавьте подключение к БД
 
 	r := mux.NewRouter()
@@ -278,8 +280,8 @@ func (a *Application) RunServer() error {
 }
 
 func LoadEnv() {
-    err := godotenv.Load()
-    if err != nil {
-        log.Println("Предупреждение: .env файл не найден, загрузка переменных из системы")
-    }
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Предупреждение: .env файл не найден, загрузка переменных из системы")
+	}
 }
