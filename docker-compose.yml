@@ -1,4 +1,5 @@
 
+version: '3.8'
 
 services:
   app:
@@ -7,9 +8,12 @@ services:
       - "8080:8080"
     env_file:
       - .env
+    environment:
+      DB_DSN: "host=db user=postgres password=postgres dbname=calculator port=5432 sslmode=disable"
     depends_on:
-      - db
-  
+      db:
+        condition: service_healthy
+
   db:
     image: postgres:latest
     container_name: calc-pg
@@ -19,3 +23,13 @@ services:
       POSTGRES_DB: calculator
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

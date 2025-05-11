@@ -1,17 +1,19 @@
-# Этап сборки
-FROM golang:1.20-alpine AS builder
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o app ./cmd/main.go
+# Билд приложения
+FROM golang:1.21 AS builder
 
-# Этап запуска
+WORKDIR /app
+COPY . .
+
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/main ./cmd/main.go
+
+# Запуск
 FROM alpine:latest
-WORKDIR /root/
-COPY --from=builder /app/app .
-# Если вы хотите использовать .env файл:
-COPY .env /root/.env
+
+WORKDIR /app
+COPY --from=builder /app/main .
+COPY .env .
+
 EXPOSE 8080
-# Если .env не подгружается автоматически, можно использовать
-CMD ["sh", "-c", "source /root/.env && ./app"]
+
+CMD ["./main"]
