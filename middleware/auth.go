@@ -26,6 +26,10 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(os.Getenv("JWT_SECRET")), nil
 		})
+		if err != nil {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
 
 		// Проверяем валидность токена
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
