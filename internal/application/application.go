@@ -9,6 +9,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"github.com/joho/godotenv"
 
 	"github.com/Knetic/govaluate"
 	"github.com/Powdersumm/Yandexlmsfinalproject/database"
@@ -274,4 +275,11 @@ func (a *Application) RunServer() error {
 	}
 	return err
 
+}
+
+func LoadEnv() {
+    err := godotenv.Load()
+    if err != nil {
+        log.Println("Предупреждение: .env файл не найден, загрузка переменных из системы")
+    }
 }
