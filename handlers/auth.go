@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/Powdersumm/Yandexlmscalcproject2sprint/database"
-	"github.com/Powdersumm/Yandexlmscalcproject2sprint/models"
+	"github.com/Powdersumm/Yandexlmsfinalproject/database"
+	"github.com/Powdersumm/Yandexlmsfinalproject/models"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"

@@ -1,1 +1,1 @@
-github.com/Powdersumm/Yandexlmsfinalproject/internal/application
+Yandexlmsfinalproject/

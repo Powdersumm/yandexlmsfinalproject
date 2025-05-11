@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/Knetic/govaluate"
-	"github.com/Powdersumm/Yandexlmscalcproject2sprint/database"
-	"github.com/Powdersumm/Yandexlmscalcproject2sprint/middleware"
+	"github.com/Powdersumm/Yandexlmsfinalproject/database"
+	"github.com/Powdersumm/Yandexlmsfinalproject/middleware"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )

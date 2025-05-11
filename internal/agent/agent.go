@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Powdersumm/Yandexlmscalcproject2sprint/pkg/calculation"
+	"github.com/Powdersumm/Yandexlmsfinalproject/pkg/calculation"
 )
 
 type Task struct {
