@@ -16,6 +16,7 @@ import (
 	"github.com/Powdersumm/Yandexlmsfinalproject/database"
 	"github.com/Powdersumm/Yandexlmsfinalproject/handlers"
 	"github.com/Powdersumm/Yandexlmsfinalproject/middleware"
+	"github.com/Powdersumm/Yandexlmsfinalproject/models"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
@@ -216,14 +217,18 @@ func processTask(task Task) {
 		return
 	}
 
-	// Обновляем статус задачи на "completed" и сохраняем результат
-	expressionsMutex.Lock()
-	expr, found := expressions[task.ID]
-	if found {
-		expr.Status = "completed"
-		expr.Result = result
+	// Обновляем статус и результат в БД
+	err := database.DB.Model(&models.Expression{}).
+		Where("id = ?", task.ID).
+		Updates(map[string]interface{}{
+			"status": "completed",
+			"result": result,
+		}).Error
+
+	if err != nil {
+		log.Printf("Ошибка обновления записи в БД: %v", err)
+		return
 	}
-	expressionsMutex.Unlock()
 
 	log.Printf("Задача с ID %s обработана, результат: %f", task.ID, result)
 }
