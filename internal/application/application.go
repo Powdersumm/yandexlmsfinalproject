@@ -76,7 +76,6 @@ func (a *Application) AddExpressionHandler(w http.ResponseWriter, r *http.Reques
 	// Генерация UUID
 
 	newExpression := models.Expression{
-		ID:         expressionID,
 		UserID:     userID,
 		Expression: req.Expression,
 		Status:     "pending",
@@ -87,6 +86,9 @@ func (a *Application) AddExpressionHandler(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Failed to save expression", http.StatusInternalServerError)
 		return
 	}
+
+	// Используйте newExpression.ID после сохранения
+	expressionID := newExpression.ID
 
 	// Отправка задачи в очередь
 	handlers.TaskQueue <- models.ExpressionTask{
