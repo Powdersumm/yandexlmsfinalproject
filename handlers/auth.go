@@ -156,7 +156,7 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Отправка задачи в очередь
-	handlers.TaskQueue <- models.ExpressionTask{
+	TaskQueue <- models.ExpressionTask{
 		ID:         expressionID,
 		Expression: req.Expression,
 		UserID:     userID,
