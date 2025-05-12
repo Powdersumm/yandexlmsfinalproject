@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/Powdersumm/Yandexlmsfinalproject/database"
@@ -120,6 +122,12 @@ func Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // AddExpressionHandler - обработчик выражений с сохранением в БД
+var TaskQueue = make(chan models.ExpressionTask, 100)
+
+// Добавлено: регулярное выражение для валидации выражений
+var validExpressionRegex = regexp.MustCompile(`^[\d\s+\-*/()]+$`)
+
+// AddExpressionHandler - улучшенная версия с очередью и валидацией
 func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 	type Request struct {
 		Expression string `json:"expression"`
@@ -127,12 +135,19 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request format", http.StatusBadRequest)
+		http.Error(w, "Invalid request format: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// Валидация выражения
 	if req.Expression == "" {
 		http.Error(w, "Expression cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	if !validExpressionRegex.MatchString(req.Expression) {
+		http.Error(w, "Expression contains invalid characters. Only numbers, +-*/() and spaces allowed",
+			http.StatusBadRequest)
 		return
 	}
 
@@ -144,7 +159,7 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерация UUID
-	expressionID := uuid.New().String() // Генерация UUID
+	expressionID := uuid.New().String()
 
 	newExpression := models.Expression{
 		ID:         expressionID,
@@ -154,12 +169,26 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 		Result:     0,
 	}
 
+	// Сохранение в БД
 	if err := database.DB.Create(&newExpression).Error; err != nil {
-		http.Error(w, "Failed to save expression", http.StatusInternalServerError)
+		http.Error(w, "Failed to save expression: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Здесь должна быть логика добавления задачи в очередь для обработки агентом
+	// Отправка задачи в очередь
+	task := models.ExpressionTask{
+		ID:         expressionID,
+		Expression: req.Expression,
+		UserID:     userID,
+	}
+
+	select {
+	case TaskQueue <- task:
+		// Задача успешно добавлена в очередь
+	default:
+		http.Error(w, "Server is too busy. Please try again later", http.StatusServiceUnavailable)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -178,9 +207,36 @@ func GetExpressionsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Параметры пагинации
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	offset := (page - 1) * limit
+
 	var expressions []models.Expression
-	if err := database.DB.Where("user_id = ?", userID).Find(&expressions).Error; err != nil {
-		http.Error(w, "Failed to retrieve expressions", http.StatusInternalServerError)
+	query := database.DB.Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(limit)
+
+	if err := query.Find(&expressions).Error; err != nil {
+		http.Error(w, "Failed to retrieve expressions: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Получение общего количества для пагинации
+	var totalCount int64
+	if err := database.DB.Model(&models.Expression{}).
+		Where("user_id = ?", userID).
+		Count(&totalCount).Error; err != nil {
+		http.Error(w, "Failed to get total count", http.StatusInternalServerError)
 		return
 	}
 
@@ -191,11 +247,18 @@ func GetExpressionsHandler(w http.ResponseWriter, r *http.Request) {
 			"expression": expr.Expression,
 			"status":     expr.Status,
 			"result":     expr.Result,
+			"created_at": expr.CreatedAt,
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"expressions": response,
+		"pagination": map[string]interface{}{
+			"total":     totalCount,
+			"page":      page,
+			"limit":     limit,
+			"last_page": (totalCount + int64(limit) - 1) / int64(limit),
+		},
 	})
 }

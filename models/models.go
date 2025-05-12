@@ -1,18 +1,21 @@
 package models
 
-import "gorm.io/gorm"
-
-type User struct {
-	gorm.Model
-	Login        string `gorm:"unique"`
-	PasswordHash string
-}
+import (
+	"time"
+)
 
 type Expression struct {
-	gorm.Model
-	ID         string `gorm:"type:uuid;primaryKey"` // Используйте UUID
-	UserID     uint   `gorm:"index"`                // Связь с пользователем
-	Expression string `gorm:"not null"`
-	Status     string `gorm:"default:'pending'"` // Статусы: pending/completed/error
+	ID         string `gorm:"primaryKey"`
+	UserID     uint   `gorm:"index"`
+	Expression string
+	Status     string // pending, processing, completed, error
 	Result     float64
+	CreatedAt  time.Time `gorm:"autoCreateTime"`
+	UpdatedAt  time.Time `gorm:"autoUpdateTime"`
+}
+
+type ExpressionTask struct {
+	ID         string
+	Expression string
+	UserID     uint
 }
