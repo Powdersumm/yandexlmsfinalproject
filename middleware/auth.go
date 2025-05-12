@@ -12,7 +12,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// AuthMiddleware возвращает middleware для аутентификации через JWT
 type contextKey string
 
 const userIDKey contextKey = "userID"
@@ -38,6 +37,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
+		// Парсинг токена с проверкой метода подписи
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -51,8 +51,14 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Проверка валидности токена ДО извлечения claims
+		if !token.Valid {
+			http.Error(w, "Token is invalid", http.StatusUnauthorized)
+			return
+		}
+
 		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok || !token.Valid {
+		if !ok {
 			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
 			return
 		}
@@ -64,9 +70,16 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Проверка типа sub и конвертация
 		sub, ok := claims["sub"].(float64)
 		if !ok {
-			http.Error(w, "Invalid subject claim", http.StatusUnauthorized)
+			http.Error(w, "Invalid subject claim (must be numeric)", http.StatusUnauthorized)
+			return
+		}
+
+		// Конвертация float64 -> uint с проверкой
+		if sub != float64(uint(sub)) {
+			http.Error(w, "Invalid user ID format", http.StatusUnauthorized)
 			return
 		}
 
