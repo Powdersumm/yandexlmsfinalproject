@@ -68,7 +68,7 @@ go run ./cmd/main.go
 ```
 ### 6. Проверка работоспособности
 Для этого нужно будет пройти регистрацию, авторизацию, отправку выражения и получение Get ответа через Postman
-Отправьте тестовый запрос для регистрации через Postman:
+**Отправьте тестовый запрос для регистрации через Postman:**
 ```bash
 POST http://localhost:8080/api/v1/register
 Content-Type: application/json
@@ -78,7 +78,7 @@ Content-Type: application/json
   "password": "testpassword"
 }
 ```
-Отправьте тестовый запрос для авторизации через Postman:
+**Отправьте тестовый запрос для авторизации через Postman:**
 ```bash
 POST http://localhost:8080/api/v1/login
 Content-Type: application/json
@@ -88,7 +88,7 @@ Content-Type: application/json
   "password": "testpassword"
 }
 ```
-Отправьте тестовый запрос для отправки математического выражения через Postman:
+**Отправьте тестовый запрос для отправки математического выражения через Postman:**
 ```bash
 POST http://localhost:8080/api/v1/calculate
 Authorization: Bearer <your_jwt_token>
@@ -98,7 +98,7 @@ Content-Type: application/json
   "expression": "(10 + 5) * 2 / 3"
 }
 ```
-Отправьте тестовый запрос для Get ответа через Postman:
+**Отправьте тестовый запрос для Get ответа через Postman:**
 ```bash
 GET http://localhost:8080/api/v1/expressions
 Authorization: Bearer <your_jwt_token>
