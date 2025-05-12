@@ -27,15 +27,6 @@ type Request struct {
 var expressionsMutex = &sync.Mutex{}
 
 // Expression – структура для хранения выражения и его состояния
-type Expression struct {
-	ID         string `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
-	UserID     uint   `gorm:"index"`
-	Expression string
-	Status     string
-	Result     float64
-	CreatedAt  time.Time `gorm:"autoCreateTime"`
-	UpdatedAt  time.Time `gorm:"autoUpdateTime"`
-}
 
 // Task – структура задачи для вычисления
 type Task struct {
