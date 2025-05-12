@@ -247,8 +247,15 @@ func (a *Application) RunServer() error {
 	if err := database.Connect(); err != nil {
 		return fmt.Errorf("database connection failed: %v", err)
 	}
-
 	r := mux.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			next.ServeHTTP(w, r)
+		})
+	})
 
 	// Public routes
 	r.HandleFunc("/api/v1/register", handlers.Register).Methods("POST")
