@@ -43,6 +43,7 @@ type Task struct {
 	Arg2          float64 `json:"arg2"`
 	Operation     string  `json:"operation"`
 	OperationTime int64   `json:"operation_time"`
+	Expression    string  `json:"expression"`
 }
 
 // Глобальные переменные для хранения выражений и очереди задач
