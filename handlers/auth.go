@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/Knetic/govaluate"
 	"github.com/Powdersumm/Yandexlmsfinalproject/database"
 	"github.com/Powdersumm/Yandexlmsfinalproject/middleware"
 	"github.com/Powdersumm/Yandexlmsfinalproject/models"
@@ -209,4 +211,18 @@ func GetExpressionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{"expressions": response})
+}
+
+func EvaluateExpression(expr string) (float64, error) {
+	expression, err := govaluate.NewEvaluableExpression(expr)
+	if err != nil {
+		return 0, fmt.Errorf("ошибка парсинга выражения: %v", err)
+	}
+
+	result, err := expression.Evaluate(nil)
+	if err != nil {
+		return 0, fmt.Errorf("ошибка вычисления: %v", err)
+	}
+
+	return result.(float64), nil
 }
