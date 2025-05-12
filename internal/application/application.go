@@ -74,7 +74,6 @@ func (a *Application) AddExpressionHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Генерация UUID
-	expressionID := generateUniqueID()
 
 	newExpression := models.Expression{
 		ID:         expressionID,
