@@ -96,53 +96,50 @@ func parseComplexExpression(expr string) (float64, error) {
 
 // AddExpressionHandler – обработчик POST-запроса для добавления нового выражения
 func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
-	// Декодируем тело запроса в структуру Request
+	// Декодируем тело запроса
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid expression payload", http.StatusBadRequest)
 		return
 	}
 
-	// (Опционально) Проверяем, что выражение не пустое
+	// Проверка на пустое выражение
 	if req.Expression == "" {
 		http.Error(w, "expression cannot be empty", http.StatusBadRequest)
 		return
 	}
 
-	// Вычисляем результат с помощью функции parseComplexExpression
-	result, err := parseComplexExpression(req.Expression)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	// Получаем userID из контекста
+	userID, ok := r.Context().Value("userID").(uint)
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
 
-	// Генерируем уникальный ID для нового выражения
+	// Генерация ID
 	expressionID := generateUniqueID()
 
-	// Если вы используете базу данных, можно сохранить запись (требуется импорт пакетов models/database)
-	/*
-	   expression := models.Expression{
-	       UserID:     userID, // Если нужно, получите userID из контекста (r.Context())
-	       Expression: req.Expression,
-	       Status:     "pending",
-	   }
-	   database.DB.Create(&expression)
-	*/
-
-	// Создаем запись для глобальной карты выражений
-	expr := &Expression{
+	// Сохраняем в БД
+	newExpression := models.Expression{
 		ID:         expressionID,
+		UserID:     userID,
 		Expression: req.Expression,
 		Status:     "pending",
-		Result:     result, // Результат вычисления сразу записываем в структуру
+		Result:     0, // Изначально результат 0
 	}
 
-	// Обеспечиваем потокобезопасное сохранение записи
-	expressionsMutex.Lock()
-	expressions[expressionID] = expr
-	expressionsMutex.Unlock()
+	if err := database.DB.Create(&newExpression).Error; err != nil {
+		http.Error(w, "failed to save expression", http.StatusInternalServerError)
+		return
+	}
 
-	// Возвращаем ответ с кодом 201 и JSON с ID созданного выражения
+	// Отправляем задачу в канал для обработки
+	tasks <- Task{
+		ID:         expressionID,
+		Expression: req.Expression, // Добавьте это поле в структуру Task
+	}
+
+	// Возвращаем ответ
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"id": expressionID})
 }
