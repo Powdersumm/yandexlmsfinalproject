@@ -135,7 +135,7 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерация UUID
-	expressionID := uuid.New().String()
+	expressionID := uuid.New().String() // Генерация UUID
 
 	newExpression := models.Expression{
 		ID:         expressionID,

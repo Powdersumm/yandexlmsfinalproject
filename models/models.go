@@ -10,6 +10,7 @@ type User struct {
 
 type Expression struct {
 	gorm.Model
+	ID         string `gorm:"type:uuid;primaryKey"` // Явное объявление ID
 	UserID     uint
 	Expression string
 	Status     string
