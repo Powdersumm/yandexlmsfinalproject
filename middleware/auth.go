@@ -7,26 +7,30 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 // AuthMiddleware возвращает middleware для аутентификации через JWT
+type contextKey string
+
+const userIDKey contextKey = "userID"
+
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
-			log.Fatal("JWT_SECRET environment variable not set")
+			http.Error(w, "Server configuration error", http.StatusInternalServerError)
+			return
 		}
 
-		// Извлекаем токен из заголовка
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			http.Error(w, "Authorization header required", http.StatusUnauthorized)
 			return
 		}
 
-		// Проверяем формат заголовка
 		if !strings.HasPrefix(authHeader, "Bearer ") {
 			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
 			return
@@ -34,7 +38,6 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		// Парсим токен с проверкой подписи
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -48,28 +51,26 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Проверяем валидность токена и claims
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok || !token.Valid {
 			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
 			return
 		}
 
-		// Извлекаем и проверяем subject (user ID)
-		subClaim, ok := claims["sub"]
-		if !ok {
-			http.Error(w, "Missing subject claim", http.StatusUnauthorized)
+		// Проверка срока действия
+		exp, ok := claims["exp"].(float64)
+		if !ok || time.Now().Unix() > int64(exp) {
+			http.Error(w, "Token expired", http.StatusUnauthorized)
 			return
 		}
 
-		userID, ok := subClaim.(float64)
+		sub, ok := claims["sub"].(float64)
 		if !ok {
-			http.Error(w, "Invalid subject claim format", http.StatusUnauthorized)
+			http.Error(w, "Invalid subject claim", http.StatusUnauthorized)
 			return
 		}
 
-		// Добавляем userID в контекст как uint
-		ctx := context.WithValue(r.Context(), "userID", uint(userID))
+		ctx := context.WithValue(r.Context(), userIDKey, uint(sub))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

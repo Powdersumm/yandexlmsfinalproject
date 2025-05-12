@@ -61,52 +61,61 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 // Login - обработчик входа с улучшенной безопасностью
 func Login(w http.ResponseWriter, r *http.Request) {
-	type Request struct {
+	type LoginRequest struct {
 		Login    string `json:"login"`
 		Password string `json:"password"`
 	}
 
-	var req Request
+	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
 
+	// Поиск пользователя в базе данных
 	var user models.User
 	if err := database.DB.Where("login = ?", req.Login).First(&user).Error; err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
+	// Проверка пароля
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// Генерация JWT с обработкой ошибок
+	// Генерация JWT токена
+	expirationTime := time.Now().Add(24 * time.Hour)
+	expiresIn := int(time.Until(expirationTime).Seconds())
+
+	claims := jwt.MapClaims{
+		"sub": user.ID,
+		"exp": expirationTime.Unix(),
+		"iat": time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		http.Error(w, "Server configuration error", http.StatusInternalServerError)
 		return
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user.ID,
-		"exp": time.Now().Add(time.Hour * 24).Unix(),
-		"iat": time.Now().Unix(),
-	})
-
 	tokenString, err := token.SignedString([]byte(secret))
 	if err != nil {
-		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
+	// Формирование ответа
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	json.NewEncoder(w).Encode(map[string]interface{}{
 		"access_token": tokenString,
 		"token_type":   "bearer",
-		"expires_in":   "86400", // 24 часа в секундах
+		"expires_in":   expiresIn,
+		"user_id":      user.ID,
 	})
 }
 
