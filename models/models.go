@@ -10,9 +10,9 @@ type User struct {
 
 type Expression struct {
 	gorm.Model
-	ID         string `gorm:"type:uuid;primaryKey"` // Явное объявление ID
-	UserID     uint
-	Expression string
-	Status     string
+	ID         string `gorm:"type:uuid;primaryKey"` // Используйте UUID
+	UserID     uint   `gorm:"index"`                // Связь с пользователем
+	Expression string `gorm:"not null"`
+	Status     string `gorm:"default:'pending'"` // Статусы: pending/completed/error
 	Result     float64
 }
