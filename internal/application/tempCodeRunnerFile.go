@@ -1,0 +1,1 @@
+r.HandleFunc("/internal/task", GetTaskHandler).Methods("GET")
