@@ -4,18 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/Knetic/govaluate"
 	"github.com/Powdersumm/Yandexlmsfinalproject/database"
 	"github.com/Powdersumm/Yandexlmsfinalproject/handlers"
 	"github.com/Powdersumm/Yandexlmsfinalproject/middleware"
 	"github.com/Powdersumm/Yandexlmsfinalproject/models"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 // Request – структура входящего запроса с выражением
@@ -205,7 +206,6 @@ func processTask(task models.ExpressionTask) {
 	}
 }
 
-
 // Запуск агента для обработки задач
 
 func startAgent() {
@@ -218,7 +218,6 @@ func startAgent() {
 		}
 	}
 }
-
 
 // Функция запуска приложения
 func (a *Application) RunServer() error {
@@ -238,7 +237,7 @@ func (a *Application) RunServer() error {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			next.ServeHTTP(w, r)
-		}
+		})
 	})
 
 	// Публичные эндпоинты
