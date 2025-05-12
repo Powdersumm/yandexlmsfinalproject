@@ -14,12 +14,13 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "userID"
+const UserIDKey contextKey = "userID" // 1. Делаем ключ публичным
 
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
+			log.Println("JWT_SECRET not set in environment")
 			http.Error(w, "Server configuration error", http.StatusInternalServerError)
 			return
 		}
@@ -30,14 +31,12 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if !strings.HasPrefix(authHeader, "Bearer ") {
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader { // 2. Улучшенная проверка префикса
 			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
 			return
 		}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-
-		// Парсинг токена с проверкой метода подписи
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -51,39 +50,52 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Проверка валидности токена ДО извлечения claims
 		if !token.Valid {
+			log.Println("Invalid token validation")
 			http.Error(w, "Token is invalid", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
+			log.Println("Failed to parse token claims")
 			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
 			return
 		}
 
-		// Проверка срока действия
+		// 3. Проверка expiration с приведением типа
 		exp, ok := claims["exp"].(float64)
-		if !ok || time.Now().Unix() > int64(exp) {
+		if !ok {
+			log.Println("Invalid expiration claim type")
+			http.Error(w, "Token expiration claim is invalid", http.StatusUnauthorized)
+			return
+		}
+
+		if time.Now().Unix() > int64(exp) {
+			log.Println("Token expired")
 			http.Error(w, "Token expired", http.StatusUnauthorized)
 			return
 		}
 
-		// Проверка типа sub и конвертация
+		// 4. Проверка subject claim
 		sub, ok := claims["sub"].(float64)
 		if !ok {
-			http.Error(w, "Invalid subject claim (must be numeric)", http.StatusUnauthorized)
+			log.Printf("Invalid sub claim type: %T", claims["sub"])
+			http.Error(w, "Invalid subject claim", http.StatusUnauthorized)
 			return
 		}
 
-		// Конвертация float64 -> uint с проверкой
-		if sub != float64(uint(sub)) {
+		// 5. Безопасное преобразование float64 -> uint
+		if sub != float64(uint(sub)) || sub < 0 {
+			log.Printf("Invalid user ID value: %f", sub)
 			http.Error(w, "Invalid user ID format", http.StatusUnauthorized)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userIDKey, uint(sub))
+		userID := uint(sub)
+		log.Printf("Authenticated user ID: %d", userID) // 6. Логирование успешной аутентификации
+
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
