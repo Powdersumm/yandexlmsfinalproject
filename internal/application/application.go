@@ -119,7 +119,6 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерация ID
-	expressionID := generateUniqueID()
 
 	// Сохраняем в БД
 	newExpression := models.Expression{
