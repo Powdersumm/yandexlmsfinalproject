@@ -3,6 +3,7 @@ module github.com/Powdersumm/Yandexlmsfinalproject
 go 1.21
 
 require (
+	github.com/Knetic/govaluate v3.0.0+incompatible
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
