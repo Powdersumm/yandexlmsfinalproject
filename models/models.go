@@ -5,10 +5,10 @@ import (
 )
 
 type Expression struct {
-	ID         string `gorm:"primaryKey"`
+	ID         string `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
 	UserID     uint   `gorm:"index"`
 	Expression string
-	Status     string // pending, processing, completed, error
+	Status     string
 	Result     float64
 	CreatedAt  time.Time `gorm:"autoCreateTime"`
 	UpdatedAt  time.Time `gorm:"autoUpdateTime"`
