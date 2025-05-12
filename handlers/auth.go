@@ -9,10 +9,11 @@ import (
 	"github.com/Powdersumm/Yandexlmsfinalproject/database"
 	"github.com/Powdersumm/Yandexlmsfinalproject/models"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Register - обработчик регистрации
+// Register - обработчик регистрации с улучшенной обработкой ошибок
 func Register(w http.ResponseWriter, r *http.Request) {
 	type Request struct {
 		Login    string `json:"login"`
@@ -21,33 +22,44 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
 
-	// Проверка существования пользователя
-	var user models.User
-	database.DB.Where("login = ?", req.Login).First(&user)
-	if user.ID != 0 {
-		http.Error(w, "User exists", http.StatusConflict)
+	// Валидация входных данных
+	if len(req.Login) < 3 || len(req.Password) < 6 {
+		http.Error(w, "Login must be at least 3 characters, password 6 characters", http.StatusBadRequest)
 		return
 	}
 
-	// Хеширование пароля
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	var existingUser models.User
+	if err := database.DB.Where("login = ?", req.Login).First(&existingUser).Error; err == nil {
+		http.Error(w, "User already exists", http.StatusConflict)
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Failed to process password", http.StatusInternalServerError)
+		return
+	}
 
 	newUser := models.User{
 		Login:        req.Login,
 		PasswordHash: string(hashedPassword),
 	}
-	database.DB.Create(&newUser)
 
-	// Ответ
+	if err := database.DB.Create(&newUser).Error; err != nil {
+		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"message": "User created"})
+	json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully"})
 }
 
-// Login - обработчик входа
+// Login - обработчик входа с улучшенной безопасностью
 func Login(w http.ResponseWriter, r *http.Request) {
 	type Request struct {
 		Login    string `json:"login"`
@@ -56,41 +68,49 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
 
-	// Поиск пользователя
 	var user models.User
-	database.DB.Where("login = ?", req.Login).First(&user)
-	if user.ID == 0 {
+	if err := database.DB.Where("login = ?", req.Login).First(&user).Error; err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// Проверка пароля
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// Генерация JWT
+	// Генерация JWT с обработкой ошибок
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		http.Error(w, "Server configuration error", http.StatusInternalServerError)
+		return
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
 		"exp": time.Now().Add(time.Hour * 24).Unix(),
+		"iat": time.Now().Unix(),
 	})
 
-	tokenString, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	tokenString, err := token.SignedString([]byte(secret))
+	if err != nil {
+		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
+		return
+	}
 
-	// Ответ
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"access_token": tokenString,
 		"token_type":   "bearer",
+		"expires_in":   "86400", // 24 часа в секундах
 	})
 }
 
-// AddExpressionHandler - обработчик для добавления нового выражения
+// AddExpressionHandler - обработчик выражений с сохранением в БД
 func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 	type Request struct {
 		Expression string `json:"expression"`
@@ -98,20 +118,41 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
 
-	// (Опционально) Проверяем, что выражение не пустое
 	if req.Expression == "" {
 		http.Error(w, "Expression cannot be empty", http.StatusBadRequest)
 		return
 	}
 
-	// Генерация ID выражения (можно использовать UUID)
-	expressionID := time.Now().UnixNano()
+	// Получаем userID из контекста
+	userID, ok := r.Context().Value("userID").(uint)
+	if !ok {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
 
-	// Отправляем JSON-ответ с ID выражения
+	// Генерация UUID
+	expressionID := uuid.New().String()
+
+	newExpression := models.Expression{
+		ID:         expressionID,
+		UserID:     userID,
+		Expression: req.Expression,
+		Status:     "pending",
+		Result:     0,
+	}
+
+	if err := database.DB.Create(&newExpression).Error; err != nil {
+		http.Error(w, "Failed to save expression", http.StatusInternalServerError)
+		return
+	}
+
+	// Здесь должна быть логика добавления задачи в очередь для обработки агентом
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":         expressionID,
@@ -120,16 +161,32 @@ func AddExpressionHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetExpressionsHandler - обработчик для получения списка выражений
+// GetExpressionsHandler - получение выражений из БД
 func GetExpressionsHandler(w http.ResponseWriter, r *http.Request) {
-	expressions := []map[string]interface{}{
-		{"id": 1, "expression": "2 + 2", "result": 4, "status": "completed"},
-		{"id": 2, "expression": "5 * 5", "result": 25, "status": "completed"},
+	userID, ok := r.Context().Value("userID").(uint)
+	if !ok {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
 	}
 
-	// Отправляем JSON с примерами выражений
-	w.WriteHeader(http.StatusOK)
+	var expressions []models.Expression
+	if err := database.DB.Where("user_id = ?", userID).Find(&expressions).Error; err != nil {
+		http.Error(w, "Failed to retrieve expressions", http.StatusInternalServerError)
+		return
+	}
+
+	response := make([]map[string]interface{}, len(expressions))
+	for i, expr := range expressions {
+		response[i] = map[string]interface{}{
+			"id":         expr.ID,
+			"expression": expr.Expression,
+			"status":     expr.Status,
+			"result":     expr.Result,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"expressions": expressions,
+		"expressions": response,
 	})
 }
