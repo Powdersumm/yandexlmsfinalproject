@@ -11,13 +11,10 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-
-	"github.com/Knetic/govaluate"
 	"github.com/Powdersumm/Yandexlmsfinalproject/database"
 	"github.com/Powdersumm/Yandexlmsfinalproject/handlers"
 	"github.com/Powdersumm/Yandexlmsfinalproject/middleware"
 	"github.com/Powdersumm/Yandexlmsfinalproject/models"
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
@@ -192,91 +189,75 @@ func getNextTaskToProcess() (Task, bool) {
 }
 
 // Функция для выполнения вычислений
-func processTask(task Task) {
-	var result float64
-	switch task.Operation {
-	case "+":
-		result = task.Arg1 + task.Arg2
-	case "-":
-		result = task.Arg1 - task.Arg2
-	case "*":
-		result = task.Arg1 * task.Arg2
-	case "/":
-		if task.Arg2 == 0 {
-			log.Printf("Ошибка: деление на ноль в задаче с ID %s", task.ID)
-			return
-		}
-		result = task.Arg1 / task.Arg2
-	}
-
-	// Проверка на NaN или бесконечность
-	if math.IsNaN(result) || math.IsInf(result, 0) {
-		log.Printf("Ошибка: результат вычисления для задачи с ID %s некорректен: %v", task.ID, result)
-		return
-	}
-
-	// Обновляем статус и результат в БД
-	err := database.DB.Model(&models.Expression{}).
-		Where("id = ?", task.ID).
-		Updates(map[string]interface{}{
-			"status": "completed",
-			"result": result,
-		}).Error
-
+func processTask(task models.ExpressionTask) {
+	result, err := handlers.EvaluateExpression(task.Expression)
+	status := "completed"
 	if err != nil {
-		log.Printf("Ошибка обновления записи в БД: %v", err)
-		return
+		status = "error"
+		log.Printf("Calculation error: %v", err)
 	}
 
-	log.Printf("Задача с ID %s обработана, результат: %f", task.ID, result)
+	// Обновление статуса в БД
+	if err := database.DB.Model(&models.Expression{}).
+		Where("id = ?", task.ID).
+		Updates(map[string]interface{}{"status": status, "result": result}).Error; err != nil {
+		log.Printf("DB update failed: %v", err)
+	}
 }
+
 
 // Запуск агента для обработки задач
+
 func startAgent() {
 	for {
-		task, found := getNextTaskToProcess()
-		if found {
+		select {
+		case task := <-handlers.TaskQueue:
 			processTask(task)
-		} else {
-			log.Println("Задач нет в очереди, агент ожидает...")
-			time.Sleep(1 * time.Second) // Пауза, если задач нет
+		default:
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
+
 
 // Функция запуска приложения
 func (a *Application) RunServer() error {
-	LoadEnv()
-	if err := database.Connect(); err != nil {
-		return fmt.Errorf("database connection failed: %v", err)
+	// Инициализация
+	if err := godotenv.Load(); err != nil {
+		log.Print("No .env file found")
 	}
+	if err := database.Connect(); err != nil {
+		return fmt.Errorf("DB connection failed: %v", err)
+	}
+
+	// Роутер
 	r := mux.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			next.ServeHTTP(w, r)
-		})
+		}
 	})
 
-	// Public routes
+	// Публичные эндпоинты
 	r.HandleFunc("/api/v1/register", handlers.Register).Methods("POST")
 	r.HandleFunc("/api/v1/login", handlers.Login).Methods("POST")
-	r.HandleFunc("/internal/task", GetTaskHandler).Methods("GET")
 
-	// Protected routes
+	// Защищенные эндпоинты
 	authRouter := r.PathPrefix("/api/v1").Subrouter()
 	authRouter.Use(middleware.AuthMiddleware)
 	{
-		authRouter.HandleFunc("/calculate", AddExpressionHandler).Methods("POST")
-		authRouter.HandleFunc("/expressions", GetExpressionsHandler).Methods("GET")
-		authRouter.HandleFunc("/expressions/{id}", GetExpressionByIDHandler).Methods("GET")
+		authRouter.HandleFunc("/calculate", handlers.AddExpressionHandler).Methods("POST")
+		authRouter.HandleFunc("/expressions", handlers.GetExpressionsHandler).Methods("GET")
 	}
 
+	// Запуск агента
 	go startAgent()
 
-	log.Printf("Сервер запущен на порту %s", a.config.Addr)
+	// Старт сервера
+	log.Printf("Server started on :%s", a.config.Addr)
 	return http.ListenAndServe(":"+a.config.Addr, r)
 }
 
