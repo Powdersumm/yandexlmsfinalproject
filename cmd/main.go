@@ -7,15 +7,17 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func init() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("Предупреждение: .env файл не найден, переменные окружения не загружены")
-	}
-}
-
 func main() {
-	app := application.New()
-	app.RunServer()
+	// Загрузка .env файла
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Ошибка загрузки .env файла:", err)
+	}
 
+	// Создание приложения
+	app := application.New()
+
+	// Запуск сервера
+	if err := app.RunServer(); err != nil {
+		log.Fatal("Ошибка запуска сервера:", err)
+	}
 }
